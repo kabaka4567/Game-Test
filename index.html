@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة الثعبان المتقدمة</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 15px;
+            color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+
+        .game-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .board-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stats-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            background: #1e1e1e;
+            padding: 10px 15px;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid #333;
+            font-weight: bold;
+        }
+
+        canvas {
+            background-color: #050505;
+            border: 2px solid #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .side-panel {
+            width: 280px;
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            color: #FFD700;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+
+        .quest-item {
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 8px;
+            border-right: 4px solid #888;
+            font-size: 0.9rem;
+        }
+
+        .quest-item.completed {
+            border-right-color: #4CAF50;
+            background: #1b331e;
+        }
+
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .color-box {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        .controls-hint {
+            margin-top: 15px;
+            color: #aaa;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>لعبة الثعبان المتقدمة</h1>
+
+    <div class="game-container">
+        <!-- لوحة اللعب -->
+        <div class="board-section">
+            <div class="stats-panel">
+                <div>النتيجة: <span id="score" style="color:#4CAF50;">0</span></div>
+                <div>أعلى ترتيب: <span id="high-score" style="color:#FFD700;">0</span></div>
+            </div>
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+        </div>
+
+        <!-- اللوحة الجانبية: المهمات والإضافات -->
+        <div class="side-panel">
+            <div>
+                <div class="panel-title">قائمة المهمات (Quests)</div>
+                <div id="quest1" class="quest-item">
+                    <strong>بداية الصياد:</strong> إجمع 5 تفاحات (<span id="q1-prog">0</span>/5)
+                </div>
+                <div id="quest2" class="quest-item">
+                    <strong>المحترف:</strong> حقق 150 نقطة
+                </div>
+                <div id="quest3" class="quest-item">
+                    <strong>العملاق:</strong> وصل طول الثعبان لـ 10 أجزاء
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-title">دليل العناصر</div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="color-box" style="background: #ff4d4d;"></div>
+                        <span>تفاحة عادية (+10 نقاط)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-box" style="background: #ffd700;"></div>
+                        <span>تفاحة ذهبية (+30 نقطة)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-box" style="background: #00bfff;"></div>
+                        <span>تفاحة زرقاء (إبطاء +15)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-box" style="background: #8b0000;"></div>
+                        <span>عقبات وحوائط (تجنبها!)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-hint">استخدم أسهم الكيبورد للتحكم بالتحرك</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+
+        // حالة اللعبة
+        let snake = [{ x: 10, y: 10 }];
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let highScore = localStorage.getItem('snake_high_score') || 0;
+        let speed = 100;
+        let gameInterval;
+        let gameStarted = false;
+
+        // العناصر والعقبات
+        let food = { x: 5, y: 5, type: 'normal' };
+        let obstacles = [];
+        let applesEaten = 0;
+
+        // تحديث أعلى نتيجة في الواجهة
+        document.getElementById('high-score').innerText = highScore;
+
+        // التحكم بالأسهم
+        window.addEventListener('keydown', e => {
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (dy !== 1) { dx = 0; dy = -1; gameStarted = true; }
+                    break;
+                case 'ArrowDown':
+                    if (dy !== -1) { dx = 0; dy = 1; gameStarted = true; }
+                    break;
+                case 'ArrowLeft':
+                    if (dx !== 1) { dx = -1; dy = 0; gameStarted = true; }
+                    break;
+                case 'ArrowRight':
+                    if (dx !== -1) { dx = 1; dy = 0; gameStarted = true; }
+                    break;
+            }
+        });
+
+        function gameLoop() {
+            if (hasGameEnded()) {
+                alert(`انتهت اللعبة! النتيجة: ${score}`);
+                resetGame();
+                return;
+            }
+
+            if (gameStarted) {
+                moveSnake();
+            }
+
+            drawGrid();
+            drawObstacles();
+            drawFood();
+            drawSnake();
+            checkQuests();
+        }
+
+        function moveSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            snake.unshift(head);
+
+            // التحقق من أكل الطعام
+            if (head.x === food.x && head.y === food.y) {
+                applesEaten++;
+                if (food.type === 'normal') score += 10;
+                else if (food.type === 'gold') score += 30;
+                else if (food.type === 'blue') {
+                    score += 15;
+                    // تأثير الإبطاء المؤقت
+                    speed = Math.min(speed + 20, 150);
+                    resetInterval();
+                }
+
+                document.getElementById('score').innerText = score;
+
+                // تحديث أعلى نتيجة
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('snake_high_score', highScore);
+                    document.getElementById('high-score').innerText = highScore;
+                }
+
+                generateFood();
+                updateObstacles();
+            } else {
+                snake.pop();
+            }
+        }
+
+        function hasGameEnded() {
+            const head = snake[0];
+
+            // التصادم مع الجدران
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                return true;
+            }
+
+            // التصادم مع جسم الثعبان
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) return true;
+            }
+
+            // التصادم مع العقبات
+            for (let obs of obstacles) {
+                if (head.x === obs.x && head.y === obs.y) return true;
+            }
+
+            return false;
+        }
+
+        // رسم الخريطة (Grid)
+        function drawGrid() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#111111';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < tileCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * gridSize, 0);
+                ctx.lineTo(i * gridSize, canvas.height);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, i * gridSize);
+                ctx.lineTo(canvas.width, i * gridSize);
+                ctx.stroke();
+            }
+        }
+
+        function drawSnake() {
+            snake.forEach((part, index) => {
+                ctx.fillStyle = index === 0 ? '#4CAF50' : '#81C784';
+                ctx.fillRect(part.x * gridSize + 1, part.y * gridSize + 1, gridSize - 2, gridSize - 2);
+            });
+        }
+
+        function drawFood() {
+            if (food.type === 'normal') ctx.fillStyle = '#ff4d4d';
+            else if (food.type === 'gold') ctx.fillStyle = '#ffd700';
+            else if (food.type === 'blue') ctx.fillStyle = '#00bfff';
+
+            ctx.beginPath();
+            ctx.arc(
+                food.x * gridSize + gridSize / 2,
+                food.y * gridSize + gridSize / 2,
+                gridSize / 2 - 2, 0, Math.PI * 2
+            );
+            ctx.fill();
+        }
+
+        function generateFood() {
+            let valid = false;
+            while (!valid) {
+                food.x = Math.floor(Math.random() * tileCount);
+                food.y = Math.floor(Math.random() * tileCount);
+                
+                valid = !snake.some(p => p.x === food.x && p.y === food.y) &&
+                        !obstacles.some(o => o.x === food.x && o.y === food.y);
+            }
+
+            // اختيار نوع التفاحة
+            const rand = Math.random();
+            if (rand < 0.2) food.type = 'gold';
+            else if (rand < 0.35) food.type = 'blue';
+            else food.type = 'normal';
+        }
+
+        function updateObstacles() {
+            // إضافة حواجز إضافية مع تقدم النقاط
+            if (score >= 50 && obstacles.length < 3) {
+                addObstacle();
+            }
+            if (score >= 100 && obstacles.length < 5) {
+                addObstacle();
+            }
+        }
+
+        function addObstacle() {
+            let obs = {};
+            let valid = false;
+            while (!valid) {
+                obs = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+                valid = !snake.some(p => p.x === obs.x && p.y === obs.y) &&
+                        !(food.x === obs.x && food.y === obs.y);
+            }
+            obstacles.push(obs);
+        }
+
+        function drawObstacles() {
+            ctx.fillStyle = '#8b0000';
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x * gridSize + 1, obs.y * gridSize + 1, gridSize - 2, gridSize - 2);
+            });
+        }
+
+        // نظام المهمات
+        function checkQuests() {
+            // مهمة 1
+            document.getElementById('q1-prog').innerText = Math.min(applesEaten, 5);
+            if (applesEaten >= 5) {
+                document.getElementById('quest1').classList.add('completed');
+            }
+
+            // مهمة 2
+            if (score >= 150) {
+                document.getElementById('quest2').classList.add('completed');
+            }
+
+            // مهمة 3
+            if (snake.length >= 10) {
+                document.getElementById('quest3').classList.add('completed');
+            }
+        }
+
+        function resetGame() {
+            snake = [{ x: 10, y: 10 }];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            applesEaten = 0;
+            speed = 100;
+            gameStarted = false;
+            obstacles = [];
+            document.getElementById('score').innerText = score;
+            generateFood();
+            resetInterval();
+        }
+
+        function resetInterval() {
+            clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, speed);
+        }
+
+        generateFood();
+        resetInterval();
+    </script>
+</body>
+</html>
